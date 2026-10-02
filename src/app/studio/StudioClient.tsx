@@ -176,8 +176,8 @@ export function StudioClient({ initialIcpId }: { initialIcpId?: string }) {
                   </option>
                 ))}
               </select>
-              <ButtonLink href="/icp" variant="secondary" className="shrink-0">
-                {personaId ? "Gerenciar" : "Novo ICP"}
+              <ButtonLink href={personaId ? `/icp?id=${personaId}` : "/icp"} variant="secondary" className="shrink-0">
+                {personaId ? "Editar ICP" : "Novo ICP"}
               </ButtonLink>
             </div>
           </Field>

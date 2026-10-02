@@ -18,7 +18,15 @@ function draftOf(p: Persona): IcpDraft {
   return Object.fromEntries(ICP_FIELDS.map((f) => [f.key, p[f.key] ?? ""])) as IcpDraft;
 }
 
-export function IcpClient() {
+// ICPs salvos sem conversa (ex.: criados à mão) abrem com uma fala de edição, não com a entrevista do zero.
+function editGreeting(p: Persona): ChatMessage {
+  return {
+    role: "assistant",
+    content: `Este é o ICP "${p.name}". Edite os campos da ficha à direita ou me diga o que quer ajustar (dores, desejos, objeções, provas, linguagem…) que eu atualizo para você.`,
+  };
+}
+
+export function IcpClient({ initialId }: { initialId?: string }) {
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
@@ -35,9 +43,13 @@ export function IcpClient() {
   useEffect(() => {
     fetch("/api/personas")
       .then((r) => (r.ok ? r.json() : []))
-      .then(setPersonas)
+      .then((list: Persona[]) => {
+        setPersonas(list);
+        const initial = list.find((p) => p.id === initialId);
+        if (initial) load(initial);
+      })
       .catch(() => {});
-  }, []);
+  }, [initialId]);
 
   useEffect(() => {
     chatEnd.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -60,16 +72,27 @@ export function IcpClient() {
     setNotice("");
   }
 
-  function open(p: Persona) {
-    if (p.id === selectedId || !confirmDiscard()) return;
+  function load(p: Persona) {
     setSelectedId(p.id);
-    setMessages(p.conversation.length ? p.conversation : [GREETING]);
+    setMessages(p.conversation.length ? p.conversation : [editGreeting(p)]);
     setDraft(draftOf(p));
     setReady(false);
     setDirty(false);
     setError("");
     setNotice("");
   }
+
+  function open(p: Persona) {
+    if (p.id === selectedId || !confirmDiscard()) return;
+    load(p);
+  }
+
+  function revert() {
+    const saved = personas.find((p) => p.id === selectedId);
+    if (saved && window.confirm("Descartar as alterações e voltar à versão salva?")) load(saved);
+  }
+
+  const editing = personas.find((p) => p.id === selectedId);
 
   function setField(k: IcpFieldKey, v: string) {
     setDraft((d) => ({ ...d, [k]: v }));
@@ -148,7 +171,13 @@ export function IcpClient() {
         <Button onClick={startNew} className="w-full">
           + Novo ICP
         </Button>
-        {personas.length === 0 && <p className="px-1 text-sm text-stone-500">Nenhum ICP salvo ainda.</p>}
+        {personas.length === 0 ? (
+          <p className="px-1 text-sm text-stone-500">Nenhum ICP salvo ainda.</p>
+        ) : (
+          <p className="px-1 pt-2 text-xs font-medium uppercase tracking-wide text-stone-500">
+            ICPs salvos · clique para editar
+          </p>
+        )}
         <ul className="space-y-1">
           {personas.map((p) => (
             <li key={p.id}>
@@ -213,8 +242,10 @@ export function IcpClient() {
       {/* Ficha */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Ficha do ICP</h2>
-          <span className="text-xs text-stone-500">
+          <h2 className="min-w-0 truncate text-lg font-semibold">
+            {editing ? `Editando: ${editing.name}` : "Novo ICP"}
+          </h2>
+          <span className="shrink-0 text-xs text-stone-500">
             {filled}/{ICP_FIELDS.length} campos
           </span>
         </div>
@@ -238,6 +269,11 @@ export function IcpClient() {
           <Button onClick={save} disabled={saving || sending || !draft.name.trim() || !draft.audience.trim()}>
             {saving ? "Salvando…" : selectedId ? "Salvar alterações" : "Salvar ICP"}
           </Button>
+          {selectedId && dirty && (
+            <Button variant="secondary" onClick={revert} disabled={saving || sending}>
+              Descartar alterações
+            </Button>
+          )}
           {selectedId && !dirty && (
             <ButtonLink href={`/studio?icp=${selectedId}`} variant="secondary">
               Gerar hooks para este ICP
