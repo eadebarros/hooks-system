@@ -24,11 +24,13 @@ const LABELS = {
   disinterest_check: "Desinteresse",
 } as const;
 
+const PATTERN = { tres_passos: "Fórmula de 3 passos", xyz: "Quer X? Não faça Y, faça Z" };
+
 const READING = { "6th_grade": "6º ano", high_school: "ensino médio", college: "complexa" };
 
 export function AuditPanel({ audit, compact = false }: { audit: AuditResult; compact?: boolean }) {
   const [showJson, setShowJson] = useState(false);
-  const { overall_score, checks } = audit.audit_results;
+  const { overall_score, checks, timing } = audit.audit_results;
 
   return (
     <div className="space-y-4">
@@ -39,6 +41,10 @@ export function AuditPanel({ audit, compact = false }: { audit: AuditResult; com
           <p className="text-sm text-stone-500">
             Leitura: {READING[checks.confusion_check.reading_level]} · Densidade de “você”:{" "}
             {checks.irrelevance_check.second_person_density}
+          </p>
+          <p className="text-sm text-stone-500">
+            Falado: hook ≈ {timing.hook_seconds}s · introdução ≈ {timing.intro_seconds}s
+            {checks.disinterest_check.hook_pattern && ` · ${PATTERN[checks.disinterest_check.hook_pattern]}`}
           </p>
         </div>
       </div>

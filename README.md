@@ -9,19 +9,22 @@ A especificação completa e as bases de conhecimento estão em [`briefings/`](b
 | Rota | Módulo | O que faz |
 |---|---|---|
 | `/academy` | Central educacional | Os 4 erros fatais do hook, as 6 fórmulas de Lock-In, estágios de funil e checklist. |
-| `/studio` | 1 + 2 · Profiler & Gerador | Público, funil, dor, promessa e "munição" (provas reais, nome do método, objeção). O Claude gera de 3 a 5 introduções (Hook + Lock-In Zone), cada uma já auditada. |
+| `/icp` | 0 · Definição de ICP | Conversa com o Claude que entrevista você sobre o cliente ideal e preenche a ficha (nicho, quem é, dores, desejos, solução, objeções, provas, linguagem) em tempo real. Cada ICP fica salvo no banco, com a conversa, e pode ser retomado. |
+| `/studio` | 1 + 2 · Profiler & Gerador | Seletor de ICP (preenche o briefing), funil, dor, promessa e "munição" (provas reais, nome do método, objeção). O Claude gera de 3 a 5 introduções (Hook + Lock-In Zone) no nicho do ICP, cada uma já auditada. |
 | `/auditor` | 3 · Auditor em tempo real | Score de 0 a 100 recalculado a cada tecla, com os alertas 🔴 Delay, 🟡 Low You-Density e 🟢 Lock-In Confirmed e as palavras destacadas no texto. |
-| `/library` | 4 · Biblioteca | Roteiros salvos, com filtro por funil e status, edição, aprovação e exportação em TXT/PDF. |
+| `/library` | 4 · Biblioteca | Roteiros salvos, com filtro por funil, status e ICP, edição, aprovação e exportação em TXT/PDF. |
 | `/teleprompter/[id]` | 4 · Teleprompter | Tela cheia, rolagem com velocidade ajustável, tamanho de fonte, modo espelhado e atalhos de teclado. |
 
 ### Como o Auditor pontua
 
-O Auditor é determinístico, não usa IA e roda no navegador ([`src/lib/auditor.ts`](src/lib/auditor.ts)). A primeira frase é tratada como hook e as frases 2 a 4 como Lock-In Zone. São 4 checks de 25 pontos cada:
+O Auditor é determinístico, não usa IA e roda no navegador ([`src/lib/auditor.ts`](src/lib/auditor.ts)). A primeira frase é tratada como hook (fragmentos curtos em staccato logo depois dela entram no hook também) e as até 3 frases seguintes como Lock-In Zone. São 4 checks de 25 pontos cada:
 
 - **Atraso:** saudações e apresentações ("olá", "no vídeo de hoje", "meu nome é"…) e hooks vagos, sem contexto.
 - **Confusão:** tamanho do hook, legibilidade (Flesch adaptado ao português), jargão e voz passiva.
 - **Irrelevância:** "você/sua" contra "eu/meu" e se o hook agita alguma dor.
-- **Desinteresse:** detecta as 6 fórmulas nas frases 2 a 4 e se o hook tem contraste.
+- **Desinteresse:** detecta a fórmula de 3 passos (interjeição + virada contrária), o padrão "quer X? não faça Y, faça Z", as 6 fórmulas da Lock-In Zone e se o hook tem contraste.
+
+Também estima o tempo falado do hook e da introdução e avisa quando não há nenhuma dose de valor concreto no início (speed to value). Esse aviso não entra no score.
 
 A saída segue o JSON da especificação (`audit_results.overall_score`, `checks.*`).
 

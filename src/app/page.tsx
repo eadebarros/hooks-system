@@ -9,10 +9,16 @@ const MODULES = [
     text: "Os 4 erros fatais do hook e as 6 fórmulas da Lock-In Zone, com exemplos do mercado odonto-fiscal.",
   },
   {
+    href: "/icp",
+    tag: "Etapa 0",
+    title: "Definição de ICP",
+    text: "Defina numa conversa com a IA o cliente ideal de cada nicho (dentistas, jurídico…). As fichas ficam salvas para o Gerador.",
+  },
+  {
     href: "/studio",
     tag: "Módulos 1 + 2",
     title: "Profiler & Gerador",
-    text: "Defina público, funil, dor e promessa. A IA entrega de 3 a 5 introduções completas, já auditadas.",
+    text: "Escolha o ICP, o funil e a promessa. A IA entrega de 3 a 5 introduções completas, já auditadas.",
   },
   {
     href: "/auditor",

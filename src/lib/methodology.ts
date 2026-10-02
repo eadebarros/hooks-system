@@ -142,9 +142,130 @@ export const LOCKIN_FORMULA_IDS = LOCKIN_FORMULAS.map((f) => f.id) as [
   ...LockInFormulaId[],
 ];
 
+// Frase de Lock-In que não aplica uma das 6 fórmulas: a interjeição dos 3 passos.
+export const INTERJECTION = {
+  id: "interjeicao",
+  name: "Interjeição (stop)",
+} as const;
+
+/** Tipos possíveis de uma frase da Lock-In Zone: as 6 fórmulas + a interjeição. */
+export const LOCKIN_LINE_TYPES = [...LOCKIN_FORMULAS, INTERJECTION] as const;
+
+export const LOCKIN_LINE_TYPE_IDS = LOCKIN_LINE_TYPES.map((f) => f.id) as [
+  LockInFormulaId | typeof INTERJECTION.id,
+  ...(LockInFormulaId | typeof INTERJECTION.id)[],
+];
+
 export function formulaById(id: string) {
-  return LOCKIN_FORMULAS.find((f) => f.id === id);
+  return LOCKIN_LINE_TYPES.find((f) => f.id === id);
 }
+
+// ---------------------------------------------------------------------------
+// Fórmula do hook em 3 passos (knowledge_source_3).
+
+export const HOOK_STEPS = [
+  {
+    id: "context_lean",
+    number: 1,
+    name: "Contexto + Inclinação",
+    en: "Context Lean",
+    where: "Hook (0–3s)",
+    how: "Em 1 ou 2 frases curtas, deixe claro do que o vídeo trata (para o público certo se identificar e o errado sair) e faça o espectador se inclinar para frente com uma das alavancas de inclinação.",
+    example: "Sua clínica fatura bem. A agenda está cheia.",
+  },
+  {
+    id: "interjection",
+    number: 2,
+    name: "Interjeição (Scroll-Stop)",
+    en: "Scroll-Stop Interjection",
+    where: "Lock-In, frase de transição",
+    how: 'Uma frase curta com palavra de contraste ("mas", "só que", "porém", "acontece que") que funciona como um choque: trava a pessoa e prepara a virada. Sozinha ela não entrega nada; só existe para a próxima frase.',
+    example: "Mas o lucro não aparece no fim do mês.",
+  },
+  {
+    id: "snapback",
+    number: 3,
+    name: "Virada Contrária (Snapback)",
+    en: "Contrarian Snapback",
+    where: "Lock-In, logo após a interjeição",
+    how: "A frase vai na direção oposta à inclinação inicial, sem sair do tema. Quanto maior a surpresa, mais forte o efeito. A virada precisa ser verdadeira e cumprida no vídeo: se não houver nada de valor depois, o público sai e você perde credibilidade.",
+    example: "E o problema não é o imposto. É como a sua clínica está enquadrada.",
+  },
+] as const;
+
+export const HOOK_XYZ_PATTERN = {
+  name: "Quer X? Não faça Y, faça Z",
+  how: "Variante compacta dos 3 passos: o benefício (X) inclina, a crença comum (Y) é negada e a alternativa (Z) é a virada. Z precisa ser realmente melhor que Y.",
+  example: "Se você quer pagar menos imposto, não troque de contador. Revise o enquadramento da sua clínica.",
+};
+
+export const LEAN_LEVERS = [
+  {
+    id: "terreno_comum",
+    name: "Terreno comum",
+    how: "Começa por algo que o público vive ou já sabe, para ele se reconhecer.",
+    example: "Sua clínica fatura bem e a agenda está cheia.",
+  },
+  {
+    id: "beneficio_dor",
+    name: "Benefício ou dor primeiro",
+    how: "Abre pelo resultado que ele quer ou pela dor que sente, e só depois apresenta o assunto como solução. A vontade de resolver a dor segura até quem é cético sobre o tema.",
+    example: "Se você quer pagar menos imposto, precisa olhar o enquadramento da sua clínica.",
+  },
+  {
+    id: "metafora",
+    name: "Metáfora",
+    how: "Simplifica uma ideia complexa comparando com algo do dia a dia.",
+    example: "O Simples Nacional é como um plano de celular: barato para quem usa pouco, caro para quem usa muito.",
+  },
+  {
+    id: "fato_surpreendente",
+    name: "Fato surpreendente",
+    how: "Mostra ou diz algo tão interessante que surpreende. Só com fatos verdadeiros e verificáveis.",
+    example: "Duas clínicas com o mesmo faturamento podem pagar impostos com diferença de dezenas de milhares de reais por ano.",
+  },
+  {
+    id: "referencia_cultural",
+    name: "Referência cultural (cult hopping)",
+    how: "Embrulha o assunto desconhecido em algo conhecido (um filme, um movimento, uma marca ou situação famosa). O conhecido dá conforto; o desconhecido assusta e faz sair. Use como comparação, nunca sugerindo que a pessoa ou marca endossa o produto.",
+    example: "Sabe o Leão do Imposto de Renda? Para muita clínica, ele morde mais forte no Simples.",
+  },
+] as const;
+
+export type LeanLeverId = (typeof LEAN_LEVERS)[number]["id"];
+
+export const LEAN_LEVER_IDS = LEAN_LEVERS.map((l) => l.id) as [LeanLeverId, ...LeanLeverId[]];
+
+export function leverById(id: string) {
+  return LEAN_LEVERS.find((l) => l.id === id);
+}
+
+export const CULT_HOPPING_RULES =
+  "Referências culturais servem só como comparação. Nunca sugira que uma pessoa ou marca usa, recomenda ou endossa o produto, e não use imagem de terceiros. Em nichos regulados (saúde, jurídico, contábil), prefira referências a situações, filmes, expressões populares ou movimentos a nomes de pessoas reais, e respeite as regras do conselho profissional (CFO, CFM, OAB, CFC).";
+
+// Táticas que valem para qualquer hook.
+export const SPEED_TO_VALUE_SECONDS = 4;
+export const ON_SCREEN_TEXT_WORDS = { min: 3, max: 5 } as const;
+/** Ritmo médio de fala em vídeo curto, para estimar tempos. */
+export const WORDS_PER_SECOND = 3;
+
+export const HOOK_TACTICS = [
+  {
+    id: "visual",
+    name: "Hook visual",
+    how: `Texto na tela com ${ON_SCREEN_TEXT_WORDS.min} a ${ON_SCREEN_TEXT_WORDS.max} palavras, em fonte grande, reforçando o contexto (as pessoas leem mais rápido do que ouvem). Prefira o tema a um nome que o público ainda não conhece. A imagem precisa de movimento na medida: pouco entedia, demais confunde.`,
+  },
+  {
+    id: "speed_to_value",
+    name: "Speed to value",
+    how: `Em vídeo curto, a atenção tem um cronômetro de cerca de ${SPEED_TO_VALUE_SECONDS} segundos. Entregue uma primeira dose de valor real (uma informação útil, um dado, uma dica) no hook ou logo depois. Não guarde o melhor para o final.`,
+  },
+  {
+    id: "staccato",
+    name: "Frases staccato",
+    how: "No hook, frases muito curtas. Elas forçam clareza e aumentam o valor por palavra. As frases podem se alongar depois, no corpo do vídeo.",
+  },
+] as const;
 
 export function funnelById(id: string) {
   return FUNNEL_STAGES.find((s) => s.id === id);

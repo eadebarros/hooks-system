@@ -4,7 +4,7 @@ import { db, schema } from "@/lib/db";
 import { PersonaInputSchema, issues } from "@/lib/validation";
 
 export async function GET() {
-  const rows = await db().select().from(schema.personas).orderBy(desc(schema.personas.createdAt));
+  const rows = await db().select().from(schema.personas).orderBy(desc(schema.personas.updatedAt));
   return NextResponse.json(rows);
 }
 

@@ -9,12 +9,16 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Biblioteca · Hook & Lock-In Engine" };
 
 export default async function LibraryPage({ searchParams }: PageProps<"/library">) {
-  const { stage, status, q } = (await searchParams) as Record<string, string | undefined>;
+  const { stage, status, q, icp } = (await searchParams) as Record<string, string | undefined>;
 
   let rows: (typeof schema.scripts.$inferSelect)[] = [];
+  let personas: (typeof schema.personas.$inferSelect)[] = [];
   let dbError = "";
   try {
-    rows = await db().select().from(schema.scripts).orderBy(desc(schema.scripts.updatedAt));
+    [rows, personas] = await Promise.all([
+      db().select().from(schema.scripts).orderBy(desc(schema.scripts.updatedAt)),
+      db().select().from(schema.personas).orderBy(schema.personas.name),
+    ]);
   } catch (e) {
     dbError = e instanceof Error ? e.message : "Erro ao acessar o banco.";
   }
@@ -23,6 +27,7 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
   const filtered = rows.filter(
     (r) =>
       (!stage || r.funnelStage === stage) &&
+      (!icp || r.personaId === icp) &&
       (!status || r.status === status) &&
       (!term || `${r.title} ${r.hook} ${r.audience}`.toLowerCase().includes(term)),
   );
@@ -30,7 +35,7 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
   const chip = (active: boolean) =>
     `rounded-full border px-3 py-1 text-sm ${active ? "border-brand-500 bg-brand-50 text-brand-700" : "border-stone-200 bg-white text-stone-600 hover:border-stone-400"}`;
   const href = (patch: Record<string, string | undefined>) => {
-    const p = new URLSearchParams(Object.entries({ stage, status, q, ...patch }).filter(([, v]) => v) as [string, string][]);
+    const p = new URLSearchParams(Object.entries({ stage, status, q, icp, ...patch }).filter(([, v]) => v) as [string, string][]);
     return `/library${p.size ? `?${p}` : ""}`;
   };
 
@@ -43,6 +48,7 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
       <form className="mb-4" action="/library">
         {stage && <input type="hidden" name="stage" value={stage} />}
         {status && <input type="hidden" name="status" value={status} />}
+        {icp && <input type="hidden" name="icp" value={icp} />}
         <input
           name="q"
           defaultValue={q}
@@ -65,6 +71,19 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
           Só aprovados
         </Link>
       </div>
+
+      {personas.length > 0 && (
+        <div className="-mt-3 mb-6 flex flex-wrap gap-2">
+          <Link href={href({ icp: undefined })} className={chip(!icp)}>
+            Todos os ICPs
+          </Link>
+          {personas.map((p) => (
+            <Link key={p.id} href={href({ icp: p.id })} className={chip(icp === p.id)}>
+              {p.name}
+            </Link>
+          ))}
+        </div>
+      )}
 
       {dbError && (
         <p className="rounded-lg bg-red-50 p-4 text-sm text-red-800">
@@ -90,7 +109,7 @@ export default async function LibraryPage({ searchParams }: PageProps<"/library"
                 <p className="truncate font-medium">{r.title}</p>
                 <p className="line-clamp-2 text-sm text-stone-600">{r.hook}</p>
                 <p className="mt-1 text-xs text-stone-400">
-                  {r.funnelStage} · {r.audience || "sem público"} · {r.updatedAt.toLocaleDateString("pt-BR")}
+                  {r.funnelStage} · {personas.find((p) => p.id === r.personaId)?.name ?? (r.audience || "sem público")} · {r.updatedAt.toLocaleDateString("pt-BR")}
                 </p>
               </div>
               {r.status === "approved" && (

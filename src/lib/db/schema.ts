@@ -5,21 +5,33 @@ export interface LockInLine {
   text: string;
 }
 
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+// ICP (perfil de cliente ideal). A tabela mantém o nome original "personas".
 export const personas = pgTable("personas", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
+  niche: text("niche").notNull().default(""),
   audience: text("audience").notNull(),
   painPoint: text("pain_point").notNull().default(""),
+  desires: text("desires").notNull().default(""),
   solution: text("solution").notNull().default(""),
   proof: text("proof").notNull().default(""),
   methodName: text("method_name").notNull().default(""),
   objection: text("objection").notNull().default(""),
+  language: text("language").notNull().default(""),
+  conversation: jsonb("conversation").$type<ChatMessage[]>().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const scripts = pgTable("scripts", {
   id: uuid("id").primaryKey().defaultRandom(),
   title: text("title").notNull(),
+  personaId: uuid("persona_id").references(() => personas.id, { onDelete: "set null" }),
   audience: text("audience").notNull().default(""),
   funnelStage: text("funnel_stage").notNull().default("TOFU"),
   painPoint: text("pain_point").notNull().default(""),

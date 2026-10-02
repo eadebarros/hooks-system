@@ -2,7 +2,12 @@
 // Análise determinística, sem IA: roda no navegador a cada tecla.
 // Score 0–100 = soma de 4 checks de 25 pontos, um por erro fatal do hook.
 
-import { LOCKIN_FORMULAS, type LockInFormulaId } from "./methodology";
+import {
+  LOCKIN_FORMULAS,
+  SPEED_TO_VALUE_SECONDS,
+  WORDS_PER_SECOND,
+  type LockInFormulaId,
+} from "./methodology";
 
 export type CheckStatus = "PASSED" | "WARNING" | "FAILED";
 export type HighlightKind =
@@ -49,8 +54,11 @@ export interface AuditResult {
       disinterest_check: BaseCheck & {
         lockin_formula_detected: string | null;
         lockin_formulas: { id: LockInFormulaId; name: string; sentence: number }[];
+        hook_pattern: "tres_passos" | "xyz" | null;
       };
     };
+    hook_sentence_count: number;
+    timing: { hook_seconds: number; intro_seconds: number };
   };
   alerts: Alert[];
   highlights: Highlight[];
@@ -180,6 +188,33 @@ const CONTRAST_CUES = [
   "pare de", "errado", "errada", "mito", "ninguem", "a maioria", "todo mundo",
   "segredo", "na verdade", "so que", "mais caro", "ao contrario", "diferente",
   "nao e", "deixe de", "pare",
+];
+
+// Benefício desejado: o hook pode inclinar pela dor ou pelo benefício.
+const BENEFIT_CUES = [
+  "se voce quer", "voce quer", "quiser", "economizar", "economia", "lucro",
+  "lucrar", "ganhar", "mais tempo", "mais clientes", "mais pacientes",
+  "crescer", "dormir melhor", "sobrar", "tranquilidade", "liberdade",
+];
+
+// Passo 2 da fórmula de 3 passos: frase que começa travando o espectador.
+const INTERJECTION_STARTS = [
+  "mas", "porem", "so que", "no entanto", "entretanto", "contudo",
+  "acontece que", "o problema e", "so tem um problema", "tem um detalhe",
+  "o detalhe e", "a verdade e", "na verdade", "e ai que", "so tem um porem",
+];
+
+// Variante "quer X? não faça Y, faça Z": cues da alternativa (Z).
+const XYZ_Z_STARTS = [
+  "faca", "faz", "em vez disso", "ao inves disso", "o que funciona",
+  "o certo e", "o segredo e", "a saida e", "o caminho e",
+];
+
+// Primeira dose de valor: informação concreta ou instrução prática.
+const VALUE_CUES = [
+  "faca", "use", "revise", "troque", "pare de", "comece", "evite", "confira",
+  "verifique", "calcule", "o segredo e", "a causa e", "o problema e",
+  "o motivo e", "porque", "e como", "a regra e", "o primeiro passo",
 ];
 
 const PASSIVE_RE =
@@ -318,6 +353,40 @@ function detectFormulas(sentence: Sentence, hook: Sentence | undefined) {
   return { found, cues };
 }
 
+/** Acima disso a Lock-In Zone passa bem dos 8s. */
+const INTRO_MAX_SECONDS = 10;
+
+const wordCount = (s: Sentence) => s.tokens.filter((t) => /[\p{L}\p{N}]/u.test(t.norm)).length;
+
+function startsWith(s: Sentence, phrases: readonly string[]) {
+  return findPhrases(s.tokens.slice(0, 5), phrases).find((h) => h.start === s.tokens[0]?.start);
+}
+
+/**
+ * Quantas frases formam o hook. Hooks em staccato ("Sua clínica fatura bem. A agenda está cheia.")
+ * juntam fragmentos curtos à 1ª frase, para não contá-los como Lock-In Zone.
+ */
+function hookLength(sentences: Sentence[]) {
+  if (!sentences[0] || wordCount(sentences[0]) > 10) return 1;
+  let n = 1;
+  let words = wordCount(sentences[0]);
+  while (n < 3 && sentences[n]) {
+    const next = sentences[n];
+    const w = wordCount(next);
+    if (
+      w > 6 ||
+      words + w > 20 ||
+      startsWith(next, INTERJECTION_STARTS) ||
+      detectFormulas(next, sentences[0]).found.size > 0
+    ) {
+      break;
+    }
+    words += w;
+    n++;
+  }
+  return n;
+}
+
 const statusFor = (score: number): CheckStatus =>
   score >= 20 ? "PASSED" : score >= 12 ? "WARNING" : "FAILED";
 
@@ -326,9 +395,17 @@ const statusFor = (score: number): CheckStatus =>
 
 export function auditScript(text: string): AuditResult {
   const sentences = splitSentences(text);
-  const hook = sentences[0];
-  const lockZone = sentences.slice(1, 4);
-  const intro = sentences.slice(0, 4);
+  const hookCount = hookLength(sentences);
+  const hookSentences = sentences.slice(0, hookCount);
+  // O hook pode ter mais de uma frase; a partir daqui ele é tratado como um bloco só.
+  const hook: Sentence | undefined = sentences[0] && {
+    text: hookSentences.map((s) => s.text).join(" "),
+    start: hookSentences[0].start,
+    end: hookSentences[hookCount - 1].end,
+    tokens: hookSentences.flatMap((s) => s.tokens),
+  };
+  const lockZone = sentences.slice(hookCount, hookCount + 3);
+  const intro = [...hookSentences, ...lockZone];
   const introTokens = intro.flatMap((s) => s.tokens);
   const highlights: Highlight[] = [];
   const alerts: Alert[] = [];
@@ -342,8 +419,10 @@ export function auditScript(text: string): AuditResult {
           delay_check: empty,
           confusion_check: { ...empty, reading_level: "6th_grade", flesch_pt: 0, hook_word_count: 0 },
           irrelevance_check: { ...empty, second_person_density: "Low", second_person_count: 0, first_person_count: 0 },
-          disinterest_check: { ...empty, lockin_formula_detected: null, lockin_formulas: [] },
+          disinterest_check: { ...empty, lockin_formula_detected: null, lockin_formulas: [], hook_pattern: null },
         },
+        hook_sentence_count: 0,
+        timing: { hook_seconds: 0, intro_seconds: 0 },
       },
       alerts: [],
       highlights: [],
@@ -384,7 +463,8 @@ export function auditScript(text: string): AuditResult {
 
   // --- 2. Confusão ----------------------------------------------------------
   const hookWords = hook.tokens.filter((t) => /\p{L}/u.test(t.norm));
-  const flesch = fleschPT(hook.tokens, 1);
+  const flesch = fleschPT(hook.tokens, hookCount);
+  const staccato = hookCount > 1 && hookSentences.every((s) => wordCount(s) <= 10);
   const jargon = findPhrases(hook.tokens, JARGON);
   for (const j of jargon) {
     highlights.push({ start: j.start, end: j.end, kind: "jargon", label: "Jargão / termo complexo" });
@@ -419,7 +499,9 @@ export function auditScript(text: string): AuditResult {
   const readingLevel = flesch >= 70 ? "6th_grade" : flesch >= 50 ? "high_school" : "college";
   const confusionMsg = confusionNotes.length
     ? `Simplifique: ${confusionNotes.join("; ")}. Busque linguagem de 6º ano, frases curtas e voz ativa.`
-    : "Linguagem simples, direta e de fácil compreensão.";
+    : staccato
+      ? `Hook em staccato (${hookCount} frases curtas): claro e denso.`
+      : "Linguagem simples, direta e de fácil compreensão.";
   if (statusFor(confusionScore) !== "PASSED") {
     alerts.push({ level: "yellow", title: "Clareza baixa", detail: confusionMsg });
   }
@@ -432,7 +514,7 @@ export function auditScript(text: string): AuditResult {
     for (const t of s.tokens) {
       if (SECOND_PERSON.has(t.norm)) {
         youTotal++;
-        if (s === hook) youHook++;
+        if (hookSentences.includes(s)) youHook++;
         highlights.push({ start: t.start, end: t.end, kind: "second_person", label: "2ª pessoa" });
       } else if (FIRST_PERSON.has(t.norm)) {
         iTotal++;
@@ -443,7 +525,7 @@ export function auditScript(text: string): AuditResult {
   for (const h of findPhrases(introTokens, ["minha empresa", "meu escritorio", "minha equipe", "eu ajudei", "eu ajudo"])) {
     highlights.push({ start: h.start, end: h.end, kind: "first_person", label: "Foco no criador" });
   }
-  const pain = findPhrases(hook.tokens, PAIN_CUES).length > 0;
+  const pain = findPhrases(hook.tokens, [...PAIN_CUES, ...BENEFIT_CUES]).length > 0;
   const startsWithI = hook.tokens[0] && FIRST_PERSON.has(hook.tokens[0].norm);
 
   let irrScore: number;
@@ -451,8 +533,8 @@ export function auditScript(text: string): AuditResult {
   if (youHook > 0 && youTotal >= iTotal) {
     irrScore = pain ? 25 : 21;
     irrMsg = pain
-      ? "Uso adequado de pronomes de 2ª pessoa ('você/sua') e dor do público agitada no hook."
-      : "Boa densidade de 'você/sua'. Dica: agite uma dor concreta no hook para torná-lo indispensável.";
+      ? "Uso adequado de pronomes de 2ª pessoa ('você/sua') e dor ou benefício do público no hook."
+      : "Boa densidade de 'você/sua'. Dica: abra pela dor ou pelo benefício que o público quer, para torná-lo indispensável.";
   } else if (youTotal > 0 && youTotal >= iTotal) {
     irrScore = 15;
     irrMsg = "O 'você' só aparece depois do hook. Traga o espectador para a primeira frase.";
@@ -479,7 +561,7 @@ export function auditScript(text: string): AuditResult {
     const { found, cues } = detectFormulas(s, hook);
     for (const id of found) {
       if (!formulas.some((f) => f.id === id)) {
-        formulas.push({ id, name: LOCKIN_FORMULAS.find((f) => f.id === id)!.name, sentence: idx + 2 });
+        formulas.push({ id, name: LOCKIN_FORMULAS.find((f) => f.id === id)!.name, sentence: hookCount + idx + 1 });
       }
     }
     for (const c of cues) {
@@ -493,9 +575,53 @@ export function auditScript(text: string): AuditResult {
   });
   const hookContrast = findPhrases(hook.tokens, CONTRAST_CUES).length > 0;
 
+  // Fórmula de 3 passos: interjeição seguida da virada (na mesma frase ou na seguinte).
+  let interjectionAt = -1;
+  let threeStep = false;
+  lockZone.forEach((s, idx) => {
+    const cue = interjectionAt === -1 && startsWith(s, INTERJECTION_STARTS);
+    if (!cue) return;
+    interjectionAt = idx;
+    const after = s.tokens.filter((t) => t.start > cue.end).length;
+    threeStep = after >= 5 || idx + 1 < lockZone.length;
+  });
+  // Variante "quer X? não faça Y, faça Z".
+  const xyz = intro.some((s, idx) => {
+    const neg = s.tokens.findIndex((t) => t.norm === "nao");
+    if (neg === -1) return false;
+    const rest = s.tokens.slice(neg + 1);
+    if (findPhrases(rest, ["e sim", "faca", "em vez disso"]).length) return true;
+    const next = intro[idx + 1];
+    return !!next && !!startsWith(next, XYZ_Z_STARTS);
+  });
+  const pattern = threeStep ? "tres_passos" : xyz ? "xyz" : null;
+  if (interjectionAt !== -1) {
+    const s = lockZone[interjectionAt];
+    highlights.push({ start: s.tokens[0].start, end: s.tokens[0].end, kind: "lockin", label: "Interjeição (3 passos)" });
+  }
+
   let disScore: number;
   let disMsg: string;
-  if (formulas.length) {
+  if (pattern) {
+    disScore = 25;
+    const where = hookCount + interjectionAt + 1;
+    disMsg =
+      pattern === "tres_passos"
+        ? `Alça de curiosidade em 3 passos: interjeição na frase ${where} e virada contrária logo depois.`
+        : "Alça de curiosidade no formato “quer X? não faça Y, faça Z”.";
+    if (formulas.length) disMsg += ` Fórmulas: ${formulas.map((f) => f.name).join(" + ")}.`;
+    alerts.push({
+      level: "green",
+      title: "Lock-In Confirmed",
+      detail: [
+        pattern === "tres_passos" ? "Fórmula de 3 passos" : "Quer X? Não faça Y, faça Z",
+        ...formulas.map((f) => `${f.name} (frase ${f.sentence})`),
+      ].join(", ") + ".",
+    });
+  } else if (interjectionAt !== -1 && !formulas.some((f) => f.id !== "contraste")) {
+    disScore = 8;
+    disMsg = `Interjeição na frase ${hookCount + interjectionAt + 1}, mas sem a virada contrária. Complete com a frase que vai na direção oposta.`;
+  } else if (formulas.length) {
     disScore = hookContrast || formulas.length > 1 ? 25 : 22;
     disMsg = `Lock-In Zone ativada com ${formulas.map((f) => f.name).join(" + ")}.`;
     alerts.push({
@@ -511,7 +637,32 @@ export function auditScript(text: string): AuditResult {
     disMsg = "O hook abre contraste, mas nenhuma das 6 fórmulas foi detectada nas frases 2 a 4.";
   } else {
     disScore = 5;
-    disMsg = "Sem alça de curiosidade: nem contraste no hook nem fórmula de Lock-In nas frases 2 a 4.";
+    disMsg = "Sem alça de curiosidade: nem contraste no hook nem fórmula de Lock-In logo depois dele.";
+  }
+
+  // --- Tempo e speed to value (informativo, não entra no score) --------------
+  const seconds = (n: number) => Math.round((n / WORDS_PER_SECOND) * 10) / 10;
+  const hookSeconds = seconds(hookWords.length);
+  const introWords = introTokens.filter((t) => /[\p{L}\p{N}]/u.test(t.norm));
+  const introSeconds = seconds(introWords.length);
+  const hasValue =
+    /\d/.test(intro.map((s) => s.text).join(" ")) ||
+    formulas.some((f) => f.id === "prova_concreta" || f.id === "magic_box") ||
+    findPhrases(introTokens, VALUE_CUES).length > 0;
+  if (introSeconds > INTRO_MAX_SECONDS) {
+    alerts.push({
+      level: "yellow",
+      title: "Introdução longa",
+      detail: `Hook + Lock-In Zone somam ≈${introSeconds}s falados. O ideal é terminar a Lock-In por volta de 8s: corte palavras ou leve parte para o corpo do vídeo.`,
+    });
+  }
+  // Só avisa quando a introdução é puro suspense: sem fórmula, sem padrão e sem nada concreto.
+  if (lockZone.length && !hasValue && !pattern && !formulas.length) {
+    alerts.push({
+      level: "yellow",
+      title: "Speed to value",
+      detail: `A introdução (≈${introSeconds}s) só gera curiosidade. Entregue uma primeira dose de valor concreto (dado, causa, dica) logo no início: a atenção dura cerca de ${SPEED_TO_VALUE_SECONDS}s.`,
+    });
   }
 
   const overall = delayScore + confusionScore + irrScore + disScore;
@@ -542,9 +693,12 @@ export function auditScript(text: string): AuditResult {
           score: disScore,
           lockin_formula_detected: formulas[0]?.name ?? null,
           lockin_formulas: formulas,
+          hook_pattern: pattern,
           message: disMsg,
         },
       },
+      hook_sentence_count: hookCount,
+      timing: { hook_seconds: hookSeconds, intro_seconds: introSeconds },
     },
     alerts,
     highlights: mergeHighlights(highlights),

@@ -3,7 +3,7 @@
 import { useDeferredValue, useMemo } from "react";
 import { auditScript } from "@/lib/auditor";
 import type { LockInLine } from "@/lib/db/schema";
-import { FUNNEL_STAGES, LOCKIN_FORMULAS } from "@/lib/methodology";
+import { FUNNEL_STAGES, LOCKIN_LINE_TYPES } from "@/lib/methodology";
 import { introText } from "@/lib/script-text";
 import { AuditPanel } from "./AuditPanel";
 import { HighlightLegend, HighlightedText } from "./HighlightedText";
@@ -71,7 +71,7 @@ export function ScriptEditor({
         <section className="rounded-xl border border-stone-200 bg-white p-4">
           <div className="mb-2 flex items-baseline justify-between">
             <h3 className="font-semibold">Hook</h3>
-            <span className="text-xs text-stone-400">frase 1 · 0–3s</span>
+            <span className="text-xs text-stone-400">1 frase ou 2 curtas · 0–3s</span>
           </div>
           <textarea
             className={`${inputCls} min-h-20 text-lg`}
@@ -84,7 +84,7 @@ export function ScriptEditor({
         <section className="rounded-xl border border-stone-200 bg-white p-4">
           <div className="mb-2 flex items-baseline justify-between">
             <h3 className="font-semibold">Lock-In Zone</h3>
-            <span className="text-xs text-stone-400">frases 2 a 4 · 3–8s</span>
+            <span className="text-xs text-stone-400">até 3 frases após o hook · 3–8s</span>
           </div>
           <div className="space-y-3">
             {value.lockIn.map((line, i) => (
@@ -95,9 +95,9 @@ export function ScriptEditor({
                     value={line.formula}
                     onChange={(e) => setLine(i, { formula: e.target.value })}
                   >
-                    {LOCKIN_FORMULAS.map((f) => (
+                    {LOCKIN_LINE_TYPES.map((f) => (
                       <option key={f.id} value={f.id}>
-                        {f.number}. {f.name}
+                        {"number" in f ? `${f.number}. ${f.name}` : f.name}
                       </option>
                     ))}
                   </select>
